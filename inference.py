@@ -10,7 +10,11 @@ from six.moves import urllib
 
 
 import numpy as np
+from tkinter import *
+from tkinter import ttk
 from PIL import Image
+from PIL import ImageTk
+import tkinter.filedialog
 import cv2, pdb, glob, argparse
 from demo import main
 import tensorflow as tf
@@ -108,119 +112,216 @@ def label_to_color_image(label):
 
 	return colormap[label]
 
+def StartProgress(progress_var):
+    # start progress
+    progress_var.start(10)
+
+def StopProgress(progress_var):
+    # stop progress
+    progress_var.stop()
+
+def makeform(root, fields):
+   entries = {}
+   for field in fields:
+      row = Frame(root)
+      lab = Label(row, width=22, text=field+": ", anchor='w')
+      ent = Entry(row)
+      ent.insert(0,"0")
+      row.pack(side = TOP, fill = X, padx = 5 , pady = 5)
+      lab.pack(side = LEFT)
+      ent.pack(side = RIGHT, expand = YES, fill = X)
+      entries[field] = ent
+   return entries
+
+def select_image(entries):
+	# grab a reference to the image panels
+	global panelA, panelB, progress_var, L
+	row = Frame(root)
+	L = Label(row, width=22, text="In Process...", anchor='w')
+	progress_var=ttk.Progressbar(row,orient=HORIZONTAL,length=300, maximum=100, mode='determinate')
+	row.pack(side = TOP, fill = X, padx = 5 , pady = 5)
+	L.pack(side = LEFT)
+	progress_var.pack(side = RIGHT)
+	StartProgress(progress_var)
+	# open a file chooser dialog and allow the user to select an input
+	height = float(entries['Height In cm'].get())
+	name = entries['Name'].get()
+	print(name)
+	print(height)
+	# image
+	path = tkinter.filedialog.askopenfilename()
+	print(path)
+	## MODEl STARTED
+
+	if len(path) > 0:
+
+		dir_name=path
+
+		## setup ####################
+
+		LABEL_NAMES = np.asarray([
+			'background', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus',
+			'car', 'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike',
+			'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tv'
+		])
+
+		FULL_LABEL_MAP = np.arange(len(LABEL_NAMES)).reshape(len(LABEL_NAMES), 1)
+		FULL_COLOR_MAP = label_to_color_image(FULL_LABEL_MAP)
 
 
-parser = argparse.ArgumentParser(description='Deeplab Segmentation')
-parser.add_argument('-i', '--input_dir', type=str, required=True,help='Directory to save the output results. (required)')
-parser.add_argument('-ht', '--height', type=int, required=True,help='Directory to save the output results. (required)')
+		MODEL_NAME = 'xception_coco_voctrainval'  # @param ['mobilenetv2_coco_voctrainaug', 'mobilenetv2_coco_voctrainval', 'xception_coco_voctrainaug', 'xception_coco_voctrainval']
 
-args=parser.parse_args()
+		_DOWNLOAD_URL_PREFIX = 'http://download.tensorflow.org/models/'
+		_MODEL_URLS = {
+			'mobilenetv2_coco_voctrainaug':
+				'deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz',
+			'mobilenetv2_coco_voctrainval':
+				'deeplabv3_mnv2_pascal_trainval_2018_01_29.tar.gz',
+			'xception_coco_voctrainaug':
+				'deeplabv3_pascal_train_aug_2018_01_04.tar.gz',
+			'xception_coco_voctrainval':
+				'deeplabv3_pascal_trainval_2018_01_04.tar.gz',
+		}
+		_TARBALL_NAME = _MODEL_URLS[MODEL_NAME]
 
-dir_name=args.input_dir;
+		model_dir = 'deeplab_model'
+		if not os.path.exists(model_dir):
+			tf.gfile.MakeDirs(model_dir)
 
+		download_path = os.path.join(model_dir, _TARBALL_NAME)
+		if not os.path.exists(download_path):
+			print('downloading model to %s, this might take a while...' % download_path)
+			urllib.request.urlretrieve(_DOWNLOAD_URL_PREFIX + _MODEL_URLS[MODEL_NAME], 
+							download_path)
+			print('download completed! loading DeepLab model...')
 
-## setup ####################
+		MODEL = DeepLabModel(download_path)
+		print('model loaded successfully!')
 
-LABEL_NAMES = np.asarray([
-	'background', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus',
-	'car', 'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike',
-	'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tv'
-])
-
-FULL_LABEL_MAP = np.arange(len(LABEL_NAMES)).reshape(len(LABEL_NAMES), 1)
-FULL_COLOR_MAP = label_to_color_image(FULL_LABEL_MAP)
-
-
-MODEL_NAME = 'xception_coco_voctrainval'  # @param ['mobilenetv2_coco_voctrainaug', 'mobilenetv2_coco_voctrainval', 'xception_coco_voctrainaug', 'xception_coco_voctrainval']
-
-_DOWNLOAD_URL_PREFIX = 'http://download.tensorflow.org/models/'
-_MODEL_URLS = {
-	'mobilenetv2_coco_voctrainaug':
-		'deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz',
-	'mobilenetv2_coco_voctrainval':
-		'deeplabv3_mnv2_pascal_trainval_2018_01_29.tar.gz',
-	'xception_coco_voctrainaug':
-		'deeplabv3_pascal_train_aug_2018_01_04.tar.gz',
-	'xception_coco_voctrainval':
-		'deeplabv3_pascal_trainval_2018_01_04.tar.gz',
-}
-_TARBALL_NAME = _MODEL_URLS[MODEL_NAME]
-
-model_dir = 'deeplab_model'
-if not os.path.exists(model_dir):
-  tf.gfile.MakeDirs(model_dir)
-
-download_path = os.path.join(model_dir, _TARBALL_NAME)
-if not os.path.exists(download_path):
-  print('downloading model to %s, this might take a while...' % download_path)
-  urllib.request.urlretrieve(_DOWNLOAD_URL_PREFIX + _MODEL_URLS[MODEL_NAME], 
-			     download_path)
-  print('download completed! loading DeepLab model...')
-
-MODEL = DeepLabModel(download_path)
-print('model loaded successfully!')
-
-#######################################################################################
+		#######################################################################################
 
 
-#list_im=glob.glob(dir_name + '/*_img.png'); list_im.sort()
+		#list_im=glob.glob(dir_name + '/*_img.png'); list_im.sort()
 
 
-#for i in range(0,len(list_im)):
+		#for i in range(0,len(list_im)):
 
-image = Image.open(dir_name)
-#print("Image Type = ",type(image))
-back = cv2.imread('sample_data/input/testbg.jpeg',cv2.IMREAD_COLOR)
+		image = Image.open(dir_name)
+		#print("Image Type = ",type(image))
+		back = cv2.imread('sample_data/input/background.jpeg',cv2.IMREAD_COLOR)
 
+		res_im, seg = MODEL.run(image)
 
-res_im,seg=MODEL.run(image)
+		seg=cv2.resize(seg.astype(np.uint8),image.size)
+		mask_sel=(seg==15).astype(np.float32)
+		mask = 255*mask_sel.astype(np.uint8)
 
-seg=cv2.resize(seg.astype(np.uint8),image.size)
-mask_sel=(seg==15).astype(np.float32)
-mask = 255*mask_sel.astype(np.uint8)
+		img = np.array(image)
+		img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)   
 
-img = 	np.array(image)
-img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)   
+		res = cv2.bitwise_and(img,img,mask = mask)
+		bg_removed = res + (255 - cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)) 
 
-res = cv2.bitwise_and(img,img,mask = mask)
-bg_removed = res + (255 - cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)) 
-# cv2.imshow("original image",img)
-# cv2.imshow("mask",res)
-# cv2.imshow('input image',bg_removed)
-# cv2.waitKey(0)
-
-#print("after processing = ",type(np.asarray(255*mask_sel)))
-#
-#
-#print("back type = ",type(back))
-#print("image type = ",type(np.asarray(image)))
-#print("masksDL type = ",type(255*mask_sel.astype(np.uint8)))
-#
-#
-#print("back shape = ", back.shape)
-#print("image shape = ",np.asarray(image).shape)
-#print("masksDL shape = ",255*mask_sel.astype(np.uint8).shape)
-
-#back_align = alignImages(back, np.asarray(image), cv2.cvtColor(255*mask_sel.astype(np.uint8),cv2.COLOR_GRAY2RGB))
-
-#bg_removed = remove_bg(np.asarray(image), back_align,cv2.cvtColor(255*mask_sel.astype(np.uint8),cv2.COLOR_GRAY2RGB))
-
-#config = flags.FLAGS
-#config(sys.argv)
-
-# Using pre-trained model, change this to use your own.
-#config.load_path = src.config.PRETRAINED_MODEL
-#
-#config.batch_size = 1
-
-#cv2.imwrite(dir_name.replace('img','back'),remove_bg)
-main(bg_removed,args.height,None)
-#name= dir_name.replace('img','masksDL')
-#cv2.imwrite(name,(255*mask_sel).astype(np.uint8))
-#cv2.imwrite(dir_name.replace('img','back'),back_align)
+		image = img
+		edged = bg_removed
+		image = cv2.resize(image, (0, 0), fx = 0.5, fy = 0.5)
+		edged = cv2.resize(edged, (0, 0), fx = 0.5, fy = 0.5)
+		# OpenCV represents images in BGR order; however PIL represents
+		# images in RGB order, so we need to swap the channels
+		image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+		edged = cv2.cvtColor(edged, cv2.COLOR_BGR2RGB)
+		# convert the images to PIL format...
+		image = Image.fromarray(image)
+		edged = Image.fromarray(edged)
+		# ...and then to ImageTk format
+		image = ImageTk.PhotoImage(image)
+		edged = ImageTk.PhotoImage(edged)
 
 
-#str_msg='\nDone: ' + dir_name
-#print(str_msg)
+		# if the panels are None, initialize them
+		if panelA is None or panelB is None:
+			progress_var.destroy()
+			L.destroy()
+			# the first panel will store our original image
+			panelA = Label(image=image)
+			panelA.image = image
+			panelA.pack(side="left", padx=10, pady=10)
+			# while the second panel will store the edge map
+			panelB = Label(image=edged)
+			panelB.image = edged
+			panelB.pack(side="right", padx=10, pady=10)
+		# otherwise, update the image panels
+		else:
+			progress_var.destroy()
+			L.destroy()
+			# update the pannels
+			panelA.configure(image=image)
+			panelB.configure(image=edged)
+			panelA.image = image
+			panelB.image = edged
+
+	# cv2.imshow("original image",img)
+	# cv2.imshow("mask",res)
+	# cv2.imshow('input image',bg_removed)
+	# cv2.waitKey(0)
+
+	#print("after processing = ",type(np.asarray(255*mask_sel)))
+	#
+	#
+	#print("back type = ",type(back))
+	#print("image type = ",type(np.asarray(image)))
+	#print("masksDL type = ",type(255*mask_sel.astype(np.uint8)))
+	#
+	#
+	#print("back shape = ", back.shape)
+	#print("image shape = ",np.asarray(image).shape)
+	#print("masksDL shape = ",255*mask_sel.astype(np.uint8).shape)
+
+	#back_align = alignImages(back, np.asarray(image), cv2.cvtColor(255*mask_sel.astype(np.uint8),cv2.COLOR_GRAY2RGB))
+
+	#bg_removed = remove_bg(np.asarray(image), back_align,cv2.cvtColor(255*mask_sel.astype(np.uint8),cv2.COLOR_GRAY2RGB))
+
+	#config = flags.FLAGS
+	#config(sys.argv)
+
+	# Using pre-trained model, change this to use your own.
+	#config.load_path = src.config.PRETRAINED_MODEL
+	#
+	#config.batch_size = 1
+
+	#cv2.imwrite(dir_name.replace('img','back'),remove_bg)
+
+	######################################################
+	# main(bg_removed,height,None)
+	######################################################
+
+	#name= dir_name.replace('img','masksDL')
+	#cv2.imwrite(name,(255*mask_sel).astype(np.uint8))
+	#cv2.imwrite(dir_name.replace('img','back'),back_align)
 
 
+	#str_msg='\nDone: ' + dir_name
+	#print(str_msg)
+	## MODEL ENDED
+
+	# ensure a file path was selected
+	
+if __name__ == '__main__':
+	fields = ('Name','Height In cm')
+	# initialize the window toolkit along with the two image panels
+	root = Tk()
+	ents = makeform(root, fields)
+	L = None
+	progress_var = None
+	panelA = None
+	panelB = None
+	print(ents)
+	root.bind('<Return>', (lambda event, e = ents: fetch(e)))
+
+	# create a button, then when pressed, will trigger a file chooser
+	# dialog and allow the user to select an input image; then add the
+	# button the GUI
+	btn = Button(root, text="Select an image", command=(lambda e = ents: select_image(e)))
+	btn.pack(side="bottom", fill="both", expand="yes", padx="10", pady="10")
+	# kick off the GUI
+	root.mainloop()
